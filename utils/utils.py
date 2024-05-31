@@ -36,7 +36,7 @@ from transformers.testing_utils import CaptureLogger
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
-from peft import LoraConfig, get_peft_model, prepare_model_for_int8_training, TaskType
+from peft import LoraConfig, get_peft_model, TaskType
 from peft import PeftModel, PeftConfig
 from collections import defaultdict
 from transformers.trainer_callback import TrainerCallback
@@ -341,12 +341,15 @@ def load_model(data_args, model_args, training_args, tokenizer, logger):
             else getattr(torch, model_args.torch_dtype)
         )
         if model_args.multi_gpu_one_model and not training_args.do_train:
+            #print("HH 1")
             model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path if last_checkpoint is None else last_checkpoint,
                 device_map="auto",
                 low_cpu_mem_usage=model_args.low_cpu_mem_usage,
+                #attn_implementation='eager',
             )
         else:
+            #print("HH 2", torch_dtype)
             model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path if last_checkpoint is None else last_checkpoint,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -357,11 +360,13 @@ def load_model(data_args, model_args, training_args, tokenizer, logger):
                 torch_dtype=torch_dtype,
                 low_cpu_mem_usage=model_args.low_cpu_mem_usage,
                 trust_remote_code=True,
+                #attn_implementation='eager',
             )
         model.generation_config.max_length = data_args.max_source_length + data_args.max_new_tokens
         model.generation_config.use_cache = True
     else:
-        model = AutoModelForCausalLM.from_config(config)
+        #print("HH 3")
+        model = AutoModelForCausalLM.from_config(config) #, attn_implementation='eager')
         n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
         logger.info(f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
 
@@ -431,7 +436,8 @@ def load_tokenizer(data_args, model_args, training_args, logger):
     if model_args.tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
     elif model_args.model_name_or_path:
-        if "llama" in model_args.model_name_or_path or "BigTranslate" in model_args.model_name_or_path or "ALMA" in model_args.model_name_or_path:
+        # "llama" in model_args.model_name_or_path or 
+        if "BigTranslate" in model_args.model_name_or_path or "ALMA" in model_args.model_name_or_path:
             tokenizer = LlamaTokenizer.from_pretrained(
                 model_args.model_name_or_path, 
                 **tokenizer_kwargs, 
@@ -439,6 +445,7 @@ def load_tokenizer(data_args, model_args, training_args, logger):
         else:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_args.model_name_or_path,
+                trust_remote_code=True,
                 **tokenizer_kwargs,
             )
     else:
@@ -448,11 +455,12 @@ def load_tokenizer(data_args, model_args, training_args, logger):
         )
 
     if "llama" in model_args.model_name_or_path:
-        tokenizer.pad_token_id = 0
-        tokenizer.bos_token_id = 1
-        tokenizer.eos_token_id = 2
-        tokenizer.eos_token = "</s>"
-        tokenizer.bos_token = "<s>"
+        pass
+        #tokenizer.pad_token_id = 0
+        #tokenizer.bos_token_id = 1
+        #tokenizer.eos_token_id = 2
+        #tokenizer.eos_token = "</s>"
+        #tokenizer.bos_token = "<s>"
     elif "Mistral" in model_args.model_name_or_path:
         tokenizer.pad_token_id = 0
     elif "mpt" in model_args.model_name_or_path:
