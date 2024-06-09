@@ -437,7 +437,8 @@ def load_tokenizer(data_args, model_args, training_args, logger):
         tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
     elif model_args.model_name_or_path:
         # "llama" in model_args.model_name_or_path or 
-        if "BigTranslate" in model_args.model_name_or_path or "ALMA" in model_args.model_name_or_path:
+        # or "ALMA" in model_args.model_name_or_path
+        if "BigTranslate" in model_args.model_name_or_path:
             tokenizer = LlamaTokenizer.from_pretrained(
                 model_args.model_name_or_path, 
                 **tokenizer_kwargs, 

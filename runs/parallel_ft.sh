@@ -1,7 +1,8 @@
 OUTPUT_DIR=${1:-"./alma-7b-parallel-ft"}
-pairs=${2:-"de-en,cs-en,is-en,zh-en,ru-en,en-de,en-cs,en-is,en-zh,en-ru"}
-export HF_DATASETS_CACHE=".cache/huggingface_cache/datasets"
-export TRANSFORMERS_CACHE=".cache/models/"
+#pairs=${2:-"de-en,cs-en,is-en,zh-en,ru-en,en-de,en-cs,en-is,en-zh,en-ru"}
+pairs=${2:-"cs-en,en-cs"}
+export HF_DATASETS_CACHE="/home/aiscuser/.cache/huggingface_cache/datasets"
+export TRANSFORMERS_CACHE="/home/aiscuser/.cache/models/"
 
 # random port between 30000 and 50000
 port=$(( RANDOM % (50000 - 30000 + 1 ) + 30000 ))
@@ -46,4 +47,4 @@ accelerate launch --main_process_port ${port} --config_file configs/deepspeed_tr
     --overwrite_cache 
 
 ## Evaluation (BLEU, COMET)
-bash ./evals/eval_generation.sh ${OUTPUT_DIR} ${pairs}
+#bash ./evals/eval_generation.sh ${OUTPUT_DIR} ${pairs}

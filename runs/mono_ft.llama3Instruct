@@ -32,9 +32,10 @@ accelerate launch --main_process_port ${port} --config_file configs/deepspeed_tr
     --output_dir ${OUTPUT_DIR} \
     --max_new_tokens 256 \
     --max_source_length 256 \
-    --seed 42 \
+    --seed $RANDOM \
     --overwrite_output_dir \
     --report_to none \
-    --model_name_or_path /mnt/eastus/hieu/workspace/experiment/llm/llama2/download/pth/Meta-Llama-3-8B-Instruct/hf
+    --model_name_or_path  /mnt/hieublob2/hieu/workspace/experiment/reasoning/ALMA/mono/Meta-Llama-3-8B-Instruct/checkpoint-32000
+    #--model_name_or_path /mnt/eastus/hieu/workspace/experiment/llm/llama2/download/pth/Meta-Llama-3-8B-Instruct/hf
     #--model_name_or_path /mnt/eastus/hieu/workspace/experiment/llm/llama2/download/pth/Meta-Llama-3-8B/hf 
 #    --model_name_or_path /mnt/eastus/hieu/workspace/experiment/llm/llama2/download/7b/model 

@@ -103,7 +103,16 @@ def main():
         test_raw_data = load_a_single_text_file(pairs, data_args, model_args)
     elif data_args.mmt_data_path:
         train_raw_data, valid_raw_data, test_raw_data = load_mmt_dataset(pairs, data_args, model_args, training_args, logger)
-
+        # print("HH train_raw_data", train_raw_data)
+        # a = train_raw_data["de-en"]
+        # print("HH a", a)
+        # b = a["train"]
+        # print("HH b", b)
+        # print("HH b[0]", b[0])
+        # exit(1)
+        
+    # print("HH data_args.mono_data_path", data_args.mono_data_path)
+    # print("HH data_args.oscar_data_path", data_args.oscar_data_path)
     if data_args.mono_data_path:
         train_raw_data = load_dataset(
             "json",
@@ -132,6 +141,14 @@ def main():
                 )['train']
             )
         train_raw_data = interleave_datasets(train_raw_data, probabilities=interleave_probs, seed=training_args.seed, stopping_strategy="all_exhausted")
+    if data_args.aya_data_path:
+        print("HH data_args.aya_data_path", data_args.aya_data_path)
+        train_raw_data = load_dataset(
+            "json",
+            data_args.aya_data_path,
+            cache_dir=model_args.cache_dir,
+            streaming=data_args.streaming,
+        )['train']
     
     # load tokenizer
     set_seed(training_args.seed)
@@ -151,6 +168,9 @@ def main():
     train_datasets, eval_datasets, test_datasets = get_preprocessed_data(train_raw_data, valid_raw_data, test_raw_data, pairs, tokenizer, shots_eval_dict, data_args, training_args, model_args)
     metric = evaluate.load("sacrebleu")
 
+    print("HH train_datasets", train_datasets)
+    print("HH train_datasets[0]", train_datasets[0])
+    
     # Load model
     model = load_model(data_args, model_args, training_args, tokenizer, logger)
     collate_fn = DataCollatorForUL2(model, tokenizer) if data_args.use_ul2 else default_data_collator
