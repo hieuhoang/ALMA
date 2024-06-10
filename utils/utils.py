@@ -341,7 +341,6 @@ def load_model(data_args, model_args, training_args, tokenizer, logger):
             else getattr(torch, model_args.torch_dtype)
         )
         if model_args.multi_gpu_one_model and not training_args.do_train:
-            #print("HH 1")
             model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path if last_checkpoint is None else last_checkpoint,
                 device_map="auto",
@@ -349,7 +348,6 @@ def load_model(data_args, model_args, training_args, tokenizer, logger):
                 #attn_implementation='eager',
             )
         else:
-            #print("HH 2", torch_dtype)
             model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path if last_checkpoint is None else last_checkpoint,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -365,7 +363,6 @@ def load_model(data_args, model_args, training_args, tokenizer, logger):
         model.generation_config.max_length = data_args.max_source_length + data_args.max_new_tokens
         model.generation_config.use_cache = True
     else:
-        #print("HH 3")
         model = AutoModelForCausalLM.from_config(config) #, attn_implementation='eager')
         n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
         logger.info(f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
@@ -457,11 +454,11 @@ def load_tokenizer(data_args, model_args, training_args, logger):
 
     if "llama" in model_args.model_name_or_path:
         pass
-        #tokenizer.pad_token_id = 0
-        #tokenizer.bos_token_id = 1
-        #tokenizer.eos_token_id = 2
-        #tokenizer.eos_token = "</s>"
-        #tokenizer.bos_token = "<s>"
+        # tokenizer.pad_token_id = 0
+        # tokenizer.bos_token_id = 1
+        # tokenizer.eos_token_id = 2
+        # tokenizer.eos_token = "</s>"
+        # tokenizer.bos_token = "<s>"
     elif "Mistral" in model_args.model_name_or_path:
         tokenizer.pad_token_id = 0
     elif "mpt" in model_args.model_name_or_path:
@@ -469,6 +466,9 @@ def load_tokenizer(data_args, model_args, training_args, logger):
         tokenizer.bos_token_id = 0
         tokenizer.eos_token_id = 0
         tokenizer.pad_token = "<|padding|>"
+    elif "Meta-Llama-3" in model_args.model_name_or_path:
+        #print("in Meta-Llama-3")
+        tokenizer.pad_token = tokenizer.eos_token
 
     return tokenizer
 
@@ -486,6 +486,7 @@ def get_preprocessed_data(train_raw_data, valid_raw_data, test_raw_data, pairs, 
                 prompt = get_prompt(target_lang, source_lang, ex)
                 prompts.append(prompt)
                 inputs.append(prompt + ex[source_lang])
+
         model_inputs = tokenizer(inputs, max_length=data_args.max_source_length + data_args.max_new_tokens - 1, padding=padding, truncation=True, add_special_tokens=True)
         check_add_eos(model_inputs, tokenizer)
         labels = copy.deepcopy(model_inputs)
@@ -627,12 +628,43 @@ def get_preprocessed_data(train_raw_data, valid_raw_data, test_raw_data, pairs, 
                 model_inputs["prefix_mask"].append(prefix_mask)
         return model_inputs
 
+    def tokenize_function_aya_left_pad(examples):
+        inputs = []
+        prompts = []
+        
+        size = len(examples["inputs"])
+        assert size == len(examples["targets"])
+        for i in range(size):
+            input = examples["inputs"][i]
+            target = examples["targets"][i]
+            both = f"{input} {target}"
+            prompts.append(input)
+            inputs.append(both)
+        
+        model_inputs = tokenizer(inputs, max_length=data_args.max_source_length + data_args.max_new_tokens - 1, padding=padding, truncation=True, add_special_tokens=True)
+        check_add_eos(model_inputs, tokenizer)
+        labels = copy.deepcopy(model_inputs)
+        # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
+        # padding in the loss.
+        if padding == "max_length" and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [
+                [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+            ]
+            if data_args.ignore_prompt_token_for_loss:
+                for idx, prompt in enumerate(prompts):
+                    prompt = tokenizer(prompt, max_length=data_args.max_source_length, add_special_tokens=False).input_ids
+                    first_non_pad_idx = get_first_non_pad_index(labels["input_ids"][idx])
+                    labels["input_ids"][idx][first_non_pad_idx: first_non_pad_idx + len(prompt)] = [-100] * len(prompt) 
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
     
     # Preprocessing the datasets.
     if data_args.mmt_data_path or data_args.mono_data_path:
         column_names_mmt = ["translation"]
     if data_args.oscar_data_path:
         column_name_oscar = ["id", "meta", "text"]
+    if data_args.aya_data_path:
+        column_name_aya = ["inputs", "targets"]
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
     tok_logger = transformers.utils.logging.get_logger("transformers.tokenization_utils_base")
@@ -700,6 +732,19 @@ def get_preprocessed_data(train_raw_data, valid_raw_data, test_raw_data, pairs, 
                     remove_columns=column_name_oscar,
                 )
             processed_datasets.append(train_dataset)
+            
+        if data_args.aya_data_path:
+            assert data_args.right_pad == False
+            train_dataset = train_raw_data
+            with training_args.main_process_first(desc="train dataset map pre-processing"):
+                train_dataset = train_dataset.map(
+                    tokenize_function_aya_left_pad,
+                    batched=True,
+                    remove_columns=column_name_aya,
+                )
+            processed_datasets.append(train_dataset)
+            
+            
         train_datasets = concatenate_datasets(processed_datasets)
         train_datasets = train_datasets.shuffle(seed=training_args.seed)
         
